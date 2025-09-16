@@ -7,14 +7,8 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from src.utils import (
-    greeting_by_time,
-    group_card,
-    parse_datetime,
-    read_operations,
-    read_user_settings,
-    top_transactions,
-)
+from src.utils import (greeting_by_time, group_card, parse_datetime, read_operations, read_user_settings,
+                       top_transactions)
 
 
 def test_read_operations_mock() -> None:
@@ -51,34 +45,49 @@ def test_read_operations_invalid_format(tmp_path: Path) -> None:
     file_path.write_text("какой-то текст")
 
     with pytest.raises(Exception):
-        read_operations(file_path)
+        read_operations(str(file_path))
 
 
 def test_parse_datetime_valid() -> None:
-    """
-    Проверяет, что функция правильно парсит корректную строку.
-    """
+    """Корректная дата парсится правильно."""
     date_str = "2024-09-06 15:30:45"
     expected = datetime(2024, 9, 6, 15, 30, 45)
-
     result = parse_datetime(date_str)
     assert result == expected
 
 
-def test_parse_datetime_invalid_format() -> None:
-    """
-    Проверяет, что при неверном формате строки выбрасывается ValueError.
-    """
-    with pytest.raises(ValueError, match="Неверный формат даты и времени"):
-        parse_datetime("06-09-2024 15:30:45")  # неправильный порядок
+def test_parse_datetime_invalid_returns_now_simple() -> None:
+    """Некорректная строка возвращает datetime.now()."""
+    before = datetime.now()
+    result = parse_datetime("invalid_date")
+    after = datetime.now()
+    # Проверяем, что результат попадает в диапазон [before, after]
+    assert before <= result <= after
 
 
-def test_parse_datetime_invalid_value() -> None:
-    """
-    Проверяет, что при невозможной дате (например, 31 февраля) выбрасывается ValueError.
-    """
-    with pytest.raises(ValueError):
-        parse_datetime("2024-02-31 10:00:00")
+def test_parse_datetime_invalid_value_returns_now() -> None:
+    """Некорректная дата (например, 31 февраля) возвращает datetime.now()."""
+    before = datetime.now()
+    result = parse_datetime("2024-02-31 10:00:00")
+    after = datetime.now()
+    assert before <= result <= after
+
+
+@pytest.mark.parametrize(
+    "date_str",
+    [
+        None,  # если передан None
+        "",  # пустая строка
+        "2021",  # совсем некорректный формат
+        "06-09-2024",  # неправильный формат
+    ],
+)
+def test_parse_datetime_various_invalid_inputs(date_str: str) -> None:
+    """Разные некорректные варианты возвращают datetime.now()."""
+    before = datetime.now()
+    result = parse_datetime(date_str)
+    after = datetime.now()
+    assert before <= result <= after
 
 
 def test_parse_datetime_leap_year() -> None:
@@ -156,23 +165,23 @@ def test_group_card(transactions: List[Dict], expected: List[Dict]) -> None:
     assert result_sorted == expected_sorted
 
 
-def test_returns_top_transactions(sample_transactions) -> None:
+def test_returns_top_transactions(sample_transactions: list[dict[str, Any]]) -> None:
     result = top_transactions(sample_transactions, top_n=3)
     assert len(result) == 3  # должно вернуться ровно 3 транзакции
 
 
-def test_sorted_by_abs_amount(sample_transactions) -> None:
+def test_sorted_by_abs_amount(sample_transactions: list[dict[str, Any]]) -> None:
     result = top_transactions(sample_transactions, top_n=2)
     amounts = [abs(t["amount"]) for t in result]
     assert amounts == sorted(amounts, reverse=True)  # отсортировано по убыванию
 
 
-def test_date_format(sample_transactions) -> None:
+def test_date_format(sample_transactions: list[dict[str, Any]]) -> None:
     result = top_transactions(sample_transactions, top_n=1)
     assert result[0]["date"].count(".") == 2  # проверяем формат ДД.ММ.ГГГГ
 
 
-def test_contains_only_required_fields(sample_transactions) -> None:
+def test_contains_only_required_fields(sample_transactions: list[dict[str, Any]]) -> None:
     result = top_transactions(sample_transactions, top_n=1)[0]
     assert set(result.keys()) == {"date", "amount", "category", "description"}
 
@@ -183,7 +192,7 @@ def test_empty_transactions() -> None:
     assert result == []
 
 
-def test_transactions_less_than_top_n(sample_transactions) -> None:
+def test_transactions_less_than_top_n(sample_transactions: list[dict[str, Any]]) -> None:
     """Если транзакций меньше, чем top_n — возвращаются все."""
     result = top_transactions(sample_transactions[:2], top_n=5)
     assert len(result) == 2
@@ -206,17 +215,9 @@ def test_invalid_amount_format() -> None:
 
 
 def test_invalid_date_format() -> None:
-    """Некорректные даты должны оставаться как есть (без падения ошибки)."""
-    transactions = [
-        {
-            "Дата операции": "2021-12-01",
-            "Сумма платежа": "500,00",
-            "Категория": "Тест",
-            "Описание": "Неправильный формат даты",
-        }
-    ]
-    result = top_transactions(transactions, top_n=1)
-    assert result[0]["date"] == "2021-12-01"  # дата не преобразовалась, но функция не упала
+    tx = [{"Дата операции": "2021-12-01", "Сумма платежа": "100"}]
+    result = top_transactions(tx, top_n=1)
+    assert result[0]["date"] == "01.12.2021"
 
 
 def test_missing_fields() -> None:

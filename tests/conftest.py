@@ -1,11 +1,11 @@
-from typing import Any, Dict, List
+from typing import Any
 
 import pandas as pd
 import pytest
 
 
 @pytest.fixture
-def sample_transactions() -> List[Dict[str, Any]]:
+def sample_transactions() -> list[dict[str, Any]]:
     return [
         {
             "Дата операции": "23.08.2020 11:43:51",
@@ -52,6 +52,6 @@ def sample_data() -> pd.DataFrame:
                 ["2023-01-10", "2023-01-15", "2023-02-05", "2023-02-12", "2023-03-01", "2023-03-20"]
             ),
             "Категория": ["Еда", "Еда", "Транспорт", "Еда", "Транспорт", "Еда"],
-            "Сумма операции": [-500, -150, -200, -300, -100, -250],
+            "Сумма платежа": [-500, -150, -200, -300, -100, -250],
         }
     )

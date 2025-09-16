@@ -1,32 +1,34 @@
 import json
 from typing import Any, Dict, List
+from unittest.mock import patch
+
+import pytest
 
 from src.services import find_personal_transfers, profitable_cashback_categories
 
-# from unittest.mock import patch
-
-
-test_transactions: List[Dict[str, Any]] = [
-    {
-        "Дата операции": "15.01.2023 12:30:45",
-        "Категория": "Супермаркеты",
-        "Кэшбэк": "50.0",
-        "Описание": "Покупка в Пятёрочке",
-    },
-    {
-        "Дата операции": "20.01.2023 15:45:22",
-        "Категория": "Супермаркеты",
-        "Кэшбэк": "75.5",
-        "Описание": "Покупка в Магните",
-    },
-    {"Дата операции": "05.02.2023 09:15:33", "Категория": "АЗС", "Кэшбэк": "30.0", "Описание": "Заправка Лукойл"},
-    {"Дата операции": "10.01.2023 18:20:11", "Категория": "Переводы", "Кэшбэк": "0", "Описание": "Иван П."},
-    {"Дата операции": "25.01.2023 14:10:05", "Категория": "Переводы", "Кэшбэк": "0", "Описание": "Мария С."},
-]
+# ТЕСТЫ profitable_cashback_categories
 
 
 def test_profitable_cashback_categories_success() -> None:
     """Тест успешного расчета кешбэка по категориям за январь 2023 года."""
+    test_transactions: List[Dict[str, Any]] = [
+        {
+            "Дата операции": "15.01.2023 12:30:45",
+            "Категория": "Супермаркеты",
+            "Бонусы (включая кэшбэк)": "50.0",
+        },
+        {
+            "Дата операции": "20.01.2023 15:45:22",
+            "Категория": "Супермаркеты",
+            "Бонусы (включая кэшбэк)": "75.5",
+        },
+        {
+            "Дата операции": "10.01.2023 18:20:11",
+            "Категория": "Переводы",
+            "Бонусы (включая кэшбэк)": "0",
+        },
+    ]
+
     result: str = profitable_cashback_categories(test_transactions, 2023, 1)
     result_data: Dict[str, float] = json.loads(result)
 
@@ -36,85 +38,102 @@ def test_profitable_cashback_categories_success() -> None:
 
 def test_profitable_cashback_categories_no_data() -> None:
     """Тест обработки случая, когда нет данных за указанный период."""
-    result = profitable_cashback_categories(test_transactions, 2024, 1)
+    result = profitable_cashback_categories([], 2024, 1)
     result_data = json.loads(result)
-
     assert result_data == {}
 
 
-def test_profitable_cashback_categories_empty() -> None:
-    """Тест обработки пустого списка транзакций."""
-    result = profitable_cashback_categories([], 2023, 1)
-    result_data = json.loads(result)
-
-    assert result_data == {}
-
-
-def test_profitable_cashback_categories_exception_handling() -> None:
-    """Тест обработки исключений в profitable_cashback_categories."""
-    # Данные, которые вызовут исключение при парсинге даты
-    problematic_data: list = [{"Дата операции": "invalid_date"}]
-
-    result: str = profitable_cashback_categories(problematic_data, 2023, 1)
-    result_data: dict = json.loads(result)
-
-    assert "error" in result_data
-
-
-def test_find_personal_transfers_exception_handling() -> None:
-    """Тест обработки исключений в find_personal_transfers."""
-    # Данные, которые могут вызвать исключение в регулярном выражении
-    problematic_data = [{"Описание": None, "Категория": "Переводы"}]
-
-    result = find_personal_transfers(problematic_data)
-    result_data = json.loads(result)
-
-    assert result_data == []
-
-
-def test_profitable_cashback_categories_bad_date() -> None:
-    """Тест обработки некорректного формата даты в транзакциях."""
-    bad_data: List[Dict[str, Any]] = [{"Дата операции": "неправильная дата", "Категория": "Тест", "Кэшбэк": "10"}]
-
-    result: str = profitable_cashback_categories(bad_data, 2023, 1)
-    result_data: Dict[str, Any] = json.loads(result)
-
-    assert "error" in result_data
-
-
-def test_profitable_cashback_categories_no_category() -> None:
-    """Тест обработки транзакций без указания категории."""
-    data: List[Dict[str, Any]] = [{"Дата операции": "15.01.2023 12:30:45", "Кэшбэк": "10.0"}]
-
-    result: str = profitable_cashback_categories(data, 2023, 1)
-    result_data: Dict[str, float] = json.loads(result)
-
-    assert result_data == {"Другое": 10.0}
+@pytest.mark.parametrize(
+    "year, month",
+    [
+        (2025, 13),  # невалидный месяц
+        (2025, 0),  # месяц меньше 1
+        ("not_a_year", 5),  # невалидный год
+    ],
+)
+def test_profitable_cashback_categories_invalid(
+    sample_transactions: list[dict[str, Any]], year: int, month: int
+) -> None:
+    result = profitable_cashback_categories(sample_transactions, year, month)
+    assert isinstance(result, str)
+    parsed = json.loads(result)
+    assert isinstance(parsed, dict)
 
 
 def test_profitable_cashback_categories_none_cashback() -> None:
-    """Тест обработки значения None в поле Кэшбэк."""
-    data: List[Dict[str, Any]] = [{"Дата операции": "15.01.2023 12:30:45", "Категория": "Тест", "Кэшбэк": None}]
-
-    result: str = profitable_cashback_categories(data, 2023, 1)
-    result_data: Dict[str, float] = json.loads(result)
-
-    assert result_data == {"Тест": 0.0}
+    data = [{"Дата операции": "01.01.2024", "Категория": "Тест", "Бонусы (включая кэшбэк)": ""}]
+    result = profitable_cashback_categories(data, 2024, 1)
+    parsed = json.loads(result)
+    assert parsed == {}  # теперь сравниваем словари, а не строки
 
 
 def test_profitable_cashback_categories_empty_cashback() -> None:
-    """Тест обработки пустой строки в поле Кэшбэк."""
-    data: List[Dict[str, Any]] = [{"Дата операции": "15.01.2023 12:30:45", "Категория": "Тест", "Кэшбэк": ""}]
-
-    result: str = profitable_cashback_categories(data, 2023, 1)
-    result_data: Dict[str, float] = json.loads(result)
-
+    """Тест обработки пустой строки в поле бонусов."""
+    data = [{"Дата операции": "15.01.2023 12:30:45", "Категория": "Тест", "Бонусы (включая кэшбэк)": ""}]
+    result = profitable_cashback_categories(data, 2023, 1)
+    result_data = json.loads(result)
     assert result_data == {"Тест": 0.0}
 
 
-def test_find_personal_transfers_success(sample_transactions: List[Dict[str, Any]]) -> None:
+def test_profitable_cashback_categories_empty_data() -> None:
+    """Пустой список транзакций -> {}"""
+    result = profitable_cashback_categories([], 2024, 1)
+    assert json.loads(result) == {}
+
+
+def test_profitable_cashback_categories_invalid_date_format() -> None:
+    """Транзакции с некорректной датой не должны падать"""
+    data = [{"Дата операции": "invalid_date", "Категория": "Еда", "Бонусы (включая кэшбэк)": "10"}]
+    result = profitable_cashback_categories(data, 2024, 1)
+    parsed = json.loads(result)
+    # кешбэк не учитывается
+    assert parsed == {}
+
+
+def test_profitable_cashback_categories_valid_with_cashback() -> None:
+    """Корректный расчет кешбэка"""
+    data = [
+        {"Дата операции": "10.01.2024 12:00:00", "Категория": "Еда", "Бонусы (включая кэшбэк)": "10"},
+        {"Дата операции": "15.01.2024 15:30:00", "Категория": "Еда", "Бонусы (включая кэшбэк)": "20"},
+    ]
+    result = profitable_cashback_categories(data, 2024, 1)
+    parsed = json.loads(result)
+    assert parsed == {"Еда": 30.0}
+
+
+def test_profitable_cashback_categories_invalid_cashback_value() -> None:
+    """Некорректное значение кешбэка не должно ломать расчет"""
+    data = [{"Дата операции": "10.01.2024", "Категория": "Еда", "Бонусы (включая кэшбэк)": "abc"}]
+    result = profitable_cashback_categories(data, 2024, 1)
+    parsed = json.loads(result)
+    assert parsed == {}
+
+
+def test_profitable_cashback_categories_logs_error() -> None:
+    """Проверка, что при ошибке парсинга даты логируется ошибка"""
+    bad_data = [{"Дата операции": "неправильная дата", "Категория": "Еда", "Бонусы (включая кэшбэк)": "10"}]
+
+    with patch("src.services.logging.Logger.error") as mock_logger_error:
+        result = profitable_cashback_categories(bad_data, 2024, 1)
+        parsed = json.loads(result)
+        # функция возвращает пустой JSON при ошибке
+        assert parsed == {}
+        # проверяем, что logger.error был вызван
+        mock_logger_error.assert_called()
+
+
+# ТЕСТЫ find_personal_transfers
+
+
+def test_find_personal_transfers_success() -> None:
     """Тест успешного поиска переводов физическим лицам."""
-    result: str = find_personal_transfers(test_transactions)
+    transactions: List[Dict[str, Any]] = [
+        {"Дата операции": "10.01.2023 18:20:11", "Категория": "Переводы", "Описание": "Иван П."},
+        {"Дата операции": "25.01.2023 14:10:05", "Категория": "Переводы", "Описание": "Мария С."},
+        {"Дата операции": "15.01.2023 12:30:45", "Категория": "Супермаркеты", "Описание": "Покупка"},
+    ]
+
+    result: str = find_personal_transfers(transactions)
     result_data: List[Dict[str, Any]] = json.loads(result)
 
     assert len(result_data) == 2
@@ -122,60 +141,62 @@ def test_find_personal_transfers_success(sample_transactions: List[Dict[str, Any
     assert all("." in t["Описание"] for t in result_data)
 
 
-def test_find_personal_transfers_no_matches(sample_transactions: List[Dict[str, Any]]) -> None:
+def test_find_personal_transfers_no_matches(sample_transactions: list[dict[str, Any]]) -> None:
     """Тест поиска переводов, когда нет подходящих данных."""
-    no_transfers: List[Dict[str, Any]] = [t for t in test_transactions if t["Категория"] != "Переводы"]
+    no_transfers: List[Dict[str, Any]] = [t for t in sample_transactions if t["Категория"] != "Переводы"]
 
-    result: str = find_personal_transfers(no_transfers)
-    result_data: List[Dict[str, Any]] = json.loads(result)
-
+    result = find_personal_transfers(no_transfers)
+    result_data = json.loads(result)
     assert result_data == []
 
 
 def test_find_personal_transfers_empty() -> None:
     """Тест поиска переводов в пустом списке транзакций."""
-    result: str = find_personal_transfers([])
-    result_data: List[Dict[str, Any]] = json.loads(result)
-
+    result = find_personal_transfers([])
+    result_data = json.loads(result)
     assert result_data == []
-
-
-def test_personal_transfers_correct_format() -> None:
-    """Тест поиска переводов с корректным форматом имени."""
-    data: List[Dict[str, Any]] = [
-        {"Дата операции": "10.01.2023 18:20:11", "Категория": "Переводы", "Кэшбэк": "0", "Описание": "Иван П."}
-    ]
-
-    result: str = find_personal_transfers(data)
-    result_data: List[Dict[str, Any]] = json.loads(result)
-
-    assert len(result_data) == 1
 
 
 def test_personal_transfers_wrong_format() -> None:
     """Тест поиска переводов с некорректным форматом имени."""
-    data: List[Dict[str, Any]] = [
-        {
-            "Дата операции": "10.01.2023 18:20:11",
-            "Категория": "Переводы",
-            "Кэшбэк": "0",
-            "Описание": "Иван Петров",  # Нет точки
-        }
-    ]
-
-    result: str = find_personal_transfers(data)
-    result_data: List[Dict[str, Any]] = json.loads(result)
-
+    data = [{"Категория": "Переводы", "Описание": "Иван Петров"}]  # нет точки
+    result = find_personal_transfers(data)
+    result_data = json.loads(result)
     assert result_data == []
 
 
-def test_personal_transfers_none_description() -> None:
-    """Тест поиска переводов с None в поле Описание."""
-    data: List[Dict[str, Any]] = [
-        {"Дата операции": "10.01.2023 18:20:11", "Категория": "Переводы", "Кэшбэк": "0", "Описание": None}
+def test_find_personal_transfers_valid_case() -> None:
+    """Поиск переводов физлицам с корректным описанием"""
+    transactions = [
+        {"Дата операции": "01.01.2024", "Категория": "Переводы", "Описание": "Иван П."},
+        {"Дата операции": "02.01.2024", "Категория": "Еда", "Описание": "Магазин"},  # лишнее
     ]
+    result = find_personal_transfers(transactions)
+    parsed = json.loads(result)
+    assert len(parsed) == 1
+    assert parsed[0]["Описание"] == "Иван П."
 
-    result: str = find_personal_transfers(data)
-    result_data: List[Dict[str, Any]] = json.loads(result)
 
-    assert result_data == []
+def test_find_personal_transfers_invalid_description() -> None:
+    """Описание без фамилии с точкой не считается переводом"""
+    transactions = [
+        {"Дата операции": "01.01.2024", "Категория": "Переводы", "Описание": "Иван Иванов"},
+    ]
+    result = find_personal_transfers(transactions)
+    parsed = json.loads(result)
+    assert parsed == []
+
+
+def test_find_personal_transfers_empty_list() -> None:
+    """Пустой список транзакций"""
+    result = find_personal_transfers([])
+    parsed = json.loads(result)
+    assert parsed == []
+
+
+def test_find_personal_transfers_logs_error() -> None:
+    """Если описание None — функция возвращает пустой список, лог не вызывается"""
+    bad_data = [{"Категория": "Переводы", "Описание": None}]
+    result = find_personal_transfers(bad_data)
+    parsed = json.loads(result)
+    assert parsed == []

@@ -19,14 +19,23 @@ STOCKS_API_KEY = os.getenv("STOCKS_API_KEY")
 
 
 def convert_currency(amount: float, from_currency: str, to_currency: str) -> float | None:
-    """Конвертация валюты через apilayer"""
+    """
+    Конвертация валюты через apilayer
+    Args:
+        amount (float): сумма для конвертации
+        from_currency (str): код исходной валюты (например, "USD")
+        to_currency (str): код целевой валюты (например, "RUB")
+
+    Returns:
+        float | None: результат конвертации или None в случае ошибки
+    """
     headers = {"apikey": CURRENCY_API_KEY}
     params: Dict[str, Union[str, int, float]] = {"from": from_currency, "to": to_currency, "amount": amount}
     if not CURRENCY_API_URL:
         logger.error("Не задан CURRENCY_API_URL в .env")
         return None
     try:
-        response = requests.get(CURRENCY_API_URL, headers=headers, params=params, timeout=10)
+        response = requests.get(CURRENCY_API_URL, headers=headers, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
         result = data.get("result")
@@ -49,7 +58,7 @@ def get_stock_price(symbol: str) -> float | None:
             "symbol": symbol,
             "apikey": STOCKS_API_KEY,
         }
-        response = requests.get(STOCKS_API_URL, params=params, timeout=10)
+        response = requests.get(STOCKS_API_URL, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
         return float(data["Global Quote"]["05. price"])

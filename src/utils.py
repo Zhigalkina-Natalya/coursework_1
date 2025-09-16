@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import pandas as pd
 
@@ -10,31 +10,41 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def read_operations(excel_path: str) -> pd.DataFrame:
-    """ "Читает excel-файл с транзакциями"""
+def read_operations(file_path: str) -> pd.DataFrame:
+    """Читает Excel-файл с транзакциями"""
     try:
-        base_dir = os.path.dirname(os.path.dirname(__file__))
-        full_path = os.path.join(base_dir, excel_path)
-
-        df = pd.read_excel(full_path)
-        logging.info("Файл успешно загружен: %s", full_path)
+        df = pd.read_excel(file_path)
+        logging.info(f"Файл {file_path} успешно загружен")
         return df
+    except FileNotFoundError as e:
+        logging.error(f"Файл не найден: {file_path}: {e}")
+        raise
     except Exception as e:
-        logging.info("Ошибка при чтении файла: %s", e)
+        logging.error(f"Ошибка при чтении {file_path}: {e}")
         raise
 
 
-def parse_datetime(date_str: str) -> datetime:
-    """Парсит строку формата 'YYYY-MM-DD HH:MM:SS'."""
+def parse_datetime(date_str: str | None) -> datetime:
+    """
+    Парсит строку формата 'YYYY-MM-DD HH:MM:SS'.
+    Если дата не передана или пустая — возвращает текущую дату/время.
+    """
+    if not date_str:  # None, "", пустая строка
+        now = datetime.now()
+        logger.info("Дата не указана, используем текущую: %s", now)
+        return now
+
     try:
         return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
     except ValueError:
-        raise ValueError(f"Неверный формат даты и времени '{date_str}'")
+        now = datetime.today()
+        logger.warning("Некорректный формат даты '%s', используем текущую: %s", date_str, now.date())
+        return now
 
 
 def greeting_by_time(dt: datetime) -> str:
     """
-    Вернуть приветствие в зависимости от времени суток:
+    Возвращает приветствие в зависимости от времени суток:
     05:00-11:59 - Доброе утро
     12:00-16:59 - Добрый день
     17:00-21:59 - Добрый вечер
@@ -50,7 +60,7 @@ def greeting_by_time(dt: datetime) -> str:
     return "Доброй ночи"
 
 
-def group_card(transactions: List[Dict]) -> List[Dict]:
+def group_card(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Группирует транзакции по последним 4 цифрам карты, вычисляет total_spent и cashback.
     Правило: считаем расходами транзакции, где 'Сумма платежа' < 0 (т.е. списания).
@@ -79,34 +89,52 @@ def group_card(transactions: List[Dict]) -> List[Dict]:
     return result
 
 
-def top_transactions(transactions: list[dict], top_n: int = 5) -> list[dict]:
-    """Возвращает топ-N транзакций по сумме платежа."""
-    prepared = []
+def top_transactions(transactions: list[dict[str, Any]], top_n: int = 5) -> list[dict[str, Any]]:
+    """
+    Возвращает топ-N транзакций по сумме платежа (дата в формате дд.мм.гггг).
+    - Некорректные суммы парсятся как 0.0 (функция не должна падать).
+    - Даты любых форматов (Timestamp, datetime, строки с '.' или '-')
+      приводятся к формату дд.мм.гггг.
+    """
+    prepared: list[dict[str, Any]] = []
     for t in transactions:
+        # amount: некорректные форматы => 0.0
+        raw_amount = t.get("Сумма платежа", 0)
         try:
-            amount = float(str(t.get("Сумма платежа", "0")).replace(",", "."))
-        except ValueError:
+            amount = float(str(raw_amount).replace(",", "."))
+        except Exception:
             amount = 0.0
 
-        # Дата в формате ДД.ММ.ГГГГ (поддержка и Timestamp, и str)
+        # дата
         date_val = t.get("Дата операции", "")
-        if isinstance(date_val, pd.Timestamp):
+        date_str = ""
+        if isinstance(date_val, (pd.Timestamp, datetime)):
             date_str = date_val.strftime("%d.%m.%Y")
         elif isinstance(date_val, str):
-            date_str = date_val.split(" ")[0]
+            if "." in date_val:
+                try:
+                    date_str = pd.to_datetime(date_val, dayfirst=True, errors="raise").strftime("%d.%m.%Y")
+                except Exception:
+                    date_str = date_val.split(" ")[0]
+            else:
+                # строки без точки → стандартный ISO-формат (2021-12-01 и т.п.)
+                try:
+                    date_str = pd.to_datetime(date_val, errors="raise").strftime("%d.%m.%Y")
+                except Exception:
+                    date_str = date_val.split(" ")[0]
         else:
             date_str = ""
 
         prepared.append(
             {
                 "date": date_str,
-                "amount": amount,
-                "category": t.get("Категория", ""),
-                "description": t.get("Описание", ""),
+                "amount": abs(amount),
+                "category": t.get("Категория", "") or "",
+                "description": t.get("Описание", "") or "",
             }
         )
 
-    # Сортировка по модулю суммы
+    # Сортируем по модулю суммы (убывание) и берём top_n
     top = sorted(prepared, key=lambda x: abs(x["amount"]), reverse=True)[:top_n]
     return top
 
