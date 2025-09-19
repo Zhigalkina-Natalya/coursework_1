@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, List
 from unittest.mock import patch
 
@@ -38,9 +39,10 @@ def test_get_main_page_calls_process_main_page(sample_transactions: List[Dict[st
         patch("src.views.process_main_page") as mock_process,
     ):
         mock_process.return_value = {"mock": True}
-        result: Dict[str, Any] = get_main_page("2025-09-15 12:00:00")
+        result_json: str = get_main_page("2025-09-15 12:00:00")
 
         mock_process.assert_called_once()
+        result: Dict[str, Any] = json.loads(result_json)
         assert result == {"mock": True}
 
 

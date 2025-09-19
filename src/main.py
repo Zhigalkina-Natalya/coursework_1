@@ -36,7 +36,8 @@ def main() -> None:
 
     if choice == "1":
         date_str = input("Введите дату в формате YYYY-MM-DD HH:MM:SS: ")
-        main_page_result = get_main_page(date_str)
+        main_page_json = get_main_page(date_str)
+        main_page_result: dict[str, Any] = json.loads(main_page_json)
         print(main_page_result)
 
     elif choice == "2":

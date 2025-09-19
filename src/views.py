@@ -1,5 +1,6 @@
+import json
 import logging
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -62,7 +63,7 @@ def process_main_page(date_str: str | None, transactions: list[dict[str, Any]]) 
     }
 
 
-def get_main_page(date_str: str | None = None) -> Dict[str, Any]:
+def get_main_page(date_str: str | None = None) -> str:
     """
     Главная функция для веб-страницы.
     Принимает строку даты-времени (или None), загружает транзакции и вызывает бизнес-логику.
@@ -73,9 +74,10 @@ def get_main_page(date_str: str | None = None) -> Dict[str, Any]:
     transactions: list[dict[str, Any]] = [{str(k): v for k, v in t.items()} for t in df.to_dict(orient="records")]
 
     logger.info("Передача транзакций в бизнес-логику process_main_page")
-    return process_main_page(date_str, transactions)
+    result_dict = process_main_page(date_str, transactions)
+    return json.dumps(result_dict, ensure_ascii=False)
 
 
-# if __name__ == "__main__":
-#     result = get_main_page("2021-12-21 15:30:00")
-#     print(result)
+if __name__ == "__main__":
+    result = get_main_page("2021-12-21 15:30:00")
+    print(result)
